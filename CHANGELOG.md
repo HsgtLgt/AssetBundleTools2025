@@ -1,5 +1,20 @@
 # 更新日志
 
+## [1.0.13] - 2025-01-27
+
+### 修复
+- 修复了ProcessRequestAsync中的异常处理问题
+- 改进了HandleRequestsAsync的异常处理
+- 修复了HttpListener disposed object错误
+- 改进了StopServer方法
+
+### 技术改进
+- 将整个ProcessRequestAsync包装在try-catch中
+- 为CORS头设置添加了单独的异常处理
+- 改进了HandleRequestsAsync的异常分类处理
+- 修复了StopServer中的资源释放问题
+- 添加了ObjectDisposedException和HttpListenerException的专门处理
+
 ## [1.0.12] - 2025-01-27
 
 ### 修复
