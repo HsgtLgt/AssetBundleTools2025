@@ -71,9 +71,13 @@ namespace AssetBundleTools
             
             try
             {
-                listener?.Stop();
-                listener?.Close();
                 isRunning = false;
+                if (listener != null)
+                {
+                    listener.Stop();
+                    listener.Close();
+                    listener = null;
+                }
                 LogMessage("HTTP服务器已停止");
             }
             catch (Exception ex)
@@ -123,16 +127,30 @@ namespace AssetBundleTools
         /// </summary>
         private async System.Threading.Tasks.Task HandleRequestsAsync()
         {
-            while (isRunning && listener.IsListening)
+            while (isRunning && listener != null && listener.IsListening)
             {
                 try
                 {
                     var context = await listener.GetContextAsync();
                     _ = ProcessRequestAsync(context);
                 }
+                catch (ObjectDisposedException)
+                {
+                    LogMessage("HttpListener已被释放，停止处理请求");
+                    break;
+                }
+                catch (HttpListenerException ex)
+                {
+                    LogMessage($"HttpListener异常: {ex.Message}");
+                    break;
+                }
                 catch (Exception ex)
                 {
                     LogMessage($"处理请求时出错: {ex.Message}");
+                    if (!isRunning)
+                    {
+                        break;
+                    }
                 }
             }
         }
@@ -142,29 +160,36 @@ namespace AssetBundleTools
         /// </summary>
         private async System.Threading.Tasks.Task ProcessRequestAsync(HttpListenerContext context)
         {
-            var request = context.Request;
-            var response = context.Response;
-            
-            string path = request.Url.AbsolutePath;
-            string method = request.HttpMethod;
-            
-            LogMessage($"收到请求: {method} {path}");
-            
-            // 设置CORS头
-            response.Headers.Add("Access-Control-Allow-Origin", "*");
-            response.Headers.Add("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-            response.Headers.Add("Access-Control-Allow-Headers", "Content-Type, Authorization");
-            
-            // 处理预检请求
-            if (method == "OPTIONS")
-            {
-                response.StatusCode = 200;
-                response.Close();
-                return;
-            }
-            
             try
             {
+                var request = context.Request;
+                var response = context.Response;
+                
+                string path = request.Url.AbsolutePath;
+                string method = request.HttpMethod;
+                
+                LogMessage($"收到请求: {method} {path}");
+                
+                // 设置CORS头
+                try
+                {
+                    response.Headers.Add("Access-Control-Allow-Origin", "*");
+                    response.Headers.Add("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+                    response.Headers.Add("Access-Control-Allow-Headers", "Content-Type, Authorization");
+                }
+                catch (Exception ex)
+                {
+                    LogMessage($"设置CORS头失败: {ex.Message}");
+                }
+                
+                // 处理预检请求
+                if (method == "OPTIONS")
+                {
+                    response.StatusCode = 200;
+                    response.Close();
+                    return;
+                }
+                
                 LogMessage($"开始处理路径: {path}");
                 switch (path)
                 {
@@ -191,6 +216,7 @@ namespace AssetBundleTools
                 LogMessage($"异常堆栈: {ex.StackTrace}");
                 try
                 {
+                    var response = context.Response;
                     response.StatusCode = 500;
                     string errorHtml = GenerateErrorPage($"服务器内部错误: {ex.Message}");
                     byte[] buffer = Encoding.UTF8.GetBytes(errorHtml);
