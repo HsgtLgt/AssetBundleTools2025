@@ -27,7 +27,6 @@ namespace AssetBundleTools
         
         // 事件
         public static event Action<string> OnLogMessage;
-        public static event Action<BuildProgressEventArgs> OnBuildProgress;
         
         private void Start()
         {
@@ -96,14 +95,21 @@ namespace AssetBundleTools
         {
             while (isRunning && listener.IsListening)
             {
+                HttpListenerContext context = null;
                 try
                 {
-                    var context = listener.GetContext();
-                    yield return StartCoroutine(ProcessRequest(context));
+                    context = listener.GetContext();
                 }
                 catch (Exception ex)
                 {
-                    LogMessage($"处理请求时出错: {ex.Message}");
+                    LogMessage($"获取请求时出错: {ex.Message}");
+                    yield return null;
+                    continue;
+                }
+                
+                if (context != null)
+                {
+                    yield return StartCoroutine(ProcessRequest(context));
                 }
             }
         }
@@ -116,27 +122,27 @@ namespace AssetBundleTools
             var request = context.Request;
             var response = context.Response;
             
+            string path = request.Url.AbsolutePath;
+            string method = request.HttpMethod;
+            
+            LogMessage($"收到请求: {method} {path}");
+            
+            // 设置CORS头
+            response.Headers.Add("Access-Control-Allow-Origin", "*");
+            response.Headers.Add("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+            response.Headers.Add("Access-Control-Allow-Headers", "Content-Type, Authorization");
+            
+            // 处理预检请求
+            if (method == "OPTIONS")
+            {
+                response.StatusCode = 200;
+                response.Close();
+                yield break;
+            }
+            
+            // 路由处理
             try
             {
-                string path = request.Url.AbsolutePath;
-                string method = request.HttpMethod;
-                
-                LogMessage($"收到请求: {method} {path}");
-                
-                // 设置CORS头
-                response.Headers.Add("Access-Control-Allow-Origin", "*");
-                response.Headers.Add("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-                response.Headers.Add("Access-Control-Allow-Headers", "Content-Type, Authorization");
-                
-                // 处理预检请求
-                if (method == "OPTIONS")
-                {
-                    response.StatusCode = 200;
-                    response.Close();
-                    yield break;
-                }
-                
-                // 路由处理
                 switch (path)
                 {
                     case "/":
@@ -366,33 +372,33 @@ namespace AssetBundleTools
         /// </summary>
         private IEnumerator BuildAssetBundles(HttpListenerRequest request, HttpListenerResponse response)
         {
+            if (manager == null)
+                manager = AssetBundleManager.Instance;
+            
+            // 读取配置
+            string requestBody = "";
+            if (request.HasEntityBody)
+            {
+                using (var reader = new StreamReader(request.InputStream, request.ContentEncoding))
+                {
+                    requestBody = reader.ReadToEnd();
+                }
+            }
+            
+            var buildConfig = JsonUtility.FromJson<BuildConfigRequest>(requestBody);
+            
+            // 更新管理器配置
+            manager.buildConfig.outputPath = buildConfig.outputPath;
+            manager.buildConfig.targetPlatform = buildConfig.targetPlatform;
+            manager.buildConfig.compressionType = buildConfig.compressionType;
+            manager.buildConfig.enableIncrementalBuild = buildConfig.enableIncrementalBuild;
+            manager.buildConfig.enableDependencyAnalysis = buildConfig.enableDependencyAnalysis;
+            
+            // 开始构建
+            LogMessage("开始构建AssetBundle...");
+            
             try
             {
-                if (manager == null)
-                    manager = AssetBundleManager.Instance;
-                
-                // 读取配置
-                string requestBody = "";
-                if (request.HasEntityBody)
-                {
-                    using (var reader = new StreamReader(request.InputStream, request.ContentEncoding))
-                    {
-                        requestBody = reader.ReadToEnd();
-                    }
-                }
-                
-                var buildConfig = JsonUtility.FromJson<BuildConfigRequest>(requestBody);
-                
-                // 更新管理器配置
-                manager.buildConfig.outputPath = buildConfig.outputPath;
-                manager.buildConfig.targetPlatform = buildConfig.targetPlatform;
-                manager.buildConfig.compressionType = buildConfig.compressionType;
-                manager.buildConfig.enableIncrementalBuild = buildConfig.enableIncrementalBuild;
-                manager.buildConfig.enableDependencyAnalysis = buildConfig.enableDependencyAnalysis;
-                
-                // 开始构建
-                LogMessage("开始构建AssetBundle...");
-                
                 // 异步构建
                 var buildTask = manager.BuildAssetBundlesAsync();
                 yield return new WaitUntil(() => buildTask.IsCompleted);
@@ -407,13 +413,14 @@ namespace AssetBundleTools
                     LogMessage("AssetBundle构建失败！");
                     response.StatusCode = 500;
                 }
-                
-                response.Close();
             }
             catch (Exception ex)
             {
                 LogMessage($"构建AssetBundle时出错: {ex.Message}");
                 response.StatusCode = 500;
+            }
+            finally
+            {
                 response.Close();
             }
         }

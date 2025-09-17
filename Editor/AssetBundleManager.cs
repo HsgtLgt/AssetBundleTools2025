@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using UnityEditor;
 using UnityEngine;
@@ -562,7 +563,6 @@ namespace AssetBundleTools
         /// </summary>
         public void SaveConfig()
         {
-            string configPath = "Assets/Editor/AssetBundleConfig.asset";
             EditorUtility.SetDirty(this);
             AssetDatabase.SaveAssets();
         }
