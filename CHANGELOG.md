@@ -1,5 +1,20 @@
 # 更新日志
 
+## [1.0.3] - 2025-01-27
+
+### 🔧 修复
+- **彻底修复编译错误**: 完全解决了所有 yield 在 try-catch 中的编译错误
+- **修复 GUID 冲突**: 为所有文件生成了唯一的 GUID，解决所有冲突问题
+- **重构 HTTP 处理**: 重新设计了请求处理逻辑，完全避免在 try-catch 中使用 yield
+
+### 🎯 技术改进
+- 重新设计了 HandleRequests() 方法，使用错误标志而不是 try-catch
+- 重构了 ProcessRequest() 方法，将 yield 和错误处理分离
+- 优化了 BuildAssetBundles() 方法，避免 try-catch 包装 yield
+- 为所有 meta 文件生成了唯一的 GUID，解决冲突
+
+---
+
 ## [1.0.2] - 2025-01-27
 
 ### 🔧 修复
