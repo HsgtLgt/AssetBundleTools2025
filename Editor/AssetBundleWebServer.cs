@@ -96,6 +96,9 @@ namespace AssetBundleTools
             while (isRunning && listener.IsListening)
             {
                 HttpListenerContext context = null;
+                bool hasError = false;
+                
+                // 获取请求上下文
                 try
                 {
                     context = listener.GetContext();
@@ -103,6 +106,11 @@ namespace AssetBundleTools
                 catch (Exception ex)
                 {
                     LogMessage($"获取请求时出错: {ex.Message}");
+                    hasError = true;
+                }
+                
+                if (hasError)
+                {
                     yield return null;
                     continue;
                 }
@@ -140,47 +148,49 @@ namespace AssetBundleTools
                 yield break;
             }
             
-            // 路由处理
-            try
+            // 路由处理 - 不使用 try-catch 包装 yield
+            bool hasError = false;
+            string errorMessage = "";
+            
+            switch (path)
             {
-                switch (path)
-                {
-                    case "/":
-                        yield return StartCoroutine(ServeWebInterface(response));
-                        break;
-                    case "/api/assets":
-                        yield return StartCoroutine(GetAssets(response));
-                        break;
-                    case "/api/add-asset":
-                        yield return StartCoroutine(AddAsset(request, response));
-                        break;
-                    case "/api/remove-asset":
-                        yield return StartCoroutine(RemoveAsset(request, response));
-                        break;
-                    case "/api/clear-assets":
-                        yield return StartCoroutine(ClearAssets(response));
-                        break;
-                    case "/api/build":
-                        yield return StartCoroutine(BuildAssetBundles(request, response));
-                        break;
-                    case "/api/config":
-                        if (method == "GET")
-                            yield return StartCoroutine(GetConfig(response));
-                        else if (method == "POST")
-                            yield return StartCoroutine(SetConfig(request, response));
-                        break;
-                    case "/api/statistics":
-                        yield return StartCoroutine(GetStatistics(response));
-                        break;
-                    default:
-                        response.StatusCode = 404;
-                        response.Close();
-                        break;
-                }
+                case "/":
+                    yield return StartCoroutine(ServeWebInterface(response));
+                    break;
+                case "/api/assets":
+                    yield return StartCoroutine(GetAssets(response));
+                    break;
+                case "/api/add-asset":
+                    yield return StartCoroutine(AddAsset(request, response));
+                    break;
+                case "/api/remove-asset":
+                    yield return StartCoroutine(RemoveAsset(request, response));
+                    break;
+                case "/api/clear-assets":
+                    yield return StartCoroutine(ClearAssets(response));
+                    break;
+                case "/api/build":
+                    yield return StartCoroutine(BuildAssetBundles(request, response));
+                    break;
+                case "/api/config":
+                    if (method == "GET")
+                        yield return StartCoroutine(GetConfig(response));
+                    else if (method == "POST")
+                        yield return StartCoroutine(SetConfig(request, response));
+                    break;
+                case "/api/statistics":
+                    yield return StartCoroutine(GetStatistics(response));
+                    break;
+                default:
+                    response.StatusCode = 404;
+                    response.Close();
+                    break;
             }
-            catch (Exception ex)
+            
+            // 错误处理在 yield 之后
+            if (hasError)
             {
-                LogMessage($"处理请求时出错: {ex.Message}");
+                LogMessage($"处理请求时出错: {errorMessage}");
                 response.StatusCode = 500;
                 response.Close();
             }
@@ -397,32 +407,32 @@ namespace AssetBundleTools
             // 开始构建
             LogMessage("开始构建AssetBundle...");
             
-            try
+            bool hasError = false;
+            string errorMessage = "";
+            
+            // 异步构建 - 不使用 try-catch 包装 yield
+            var buildTask = manager.BuildAssetBundlesAsync();
+            yield return new WaitUntil(() => buildTask.IsCompleted);
+            
+            if (buildTask.Result != null)
             {
-                // 异步构建
-                var buildTask = manager.BuildAssetBundlesAsync();
-                yield return new WaitUntil(() => buildTask.IsCompleted);
-                
-                if (buildTask.Result != null)
-                {
-                    LogMessage("AssetBundle构建完成！");
-                    response.StatusCode = 200;
-                }
-                else
-                {
-                    LogMessage("AssetBundle构建失败！");
-                    response.StatusCode = 500;
-                }
+                LogMessage("AssetBundle构建完成！");
+                response.StatusCode = 200;
             }
-            catch (Exception ex)
+            else
             {
-                LogMessage($"构建AssetBundle时出错: {ex.Message}");
+                LogMessage("AssetBundle构建失败！");
                 response.StatusCode = 500;
             }
-            finally
+            
+            // 错误处理
+            if (hasError)
             {
-                response.Close();
+                LogMessage($"构建AssetBundle时出错: {errorMessage}");
+                response.StatusCode = 500;
             }
+            
+            response.Close();
         }
         
         /// <summary>
