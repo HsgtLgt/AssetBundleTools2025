@@ -224,6 +224,21 @@ namespace AssetBundleTools
                         await ServeBrowseFilesAsync(request, response);
                         LogMessage("文件浏览API请求处理完成");
                         break;
+                    case "/api/assets":
+                        LogMessage("处理获取资源列表API请求");
+                        await ServeAssetsAsync(request, response);
+                        LogMessage("获取资源列表API请求处理完成");
+                        break;
+                    case "/api/statistics":
+                        LogMessage("处理获取统计信息API请求");
+                        await ServeStatisticsAsync(request, response);
+                        LogMessage("获取统计信息API请求处理完成");
+                        break;
+                    case "/api/clear-assets":
+                        LogMessage("处理清空资源API请求");
+                        await ServeClearAssetsAsync(request, response);
+                        LogMessage("清空资源API请求处理完成");
+                        break;
                     default:
                         LogMessage($"未知路径: {path}，返回404");
                         response.StatusCode = 404;
@@ -430,16 +445,39 @@ namespace AssetBundleTools
                     requestBody = await reader.ReadToEndAsync();
                 }
                 
+                LogMessage($"收到添加资源请求: {requestBody}");
+                
+                // 解析JSON数据
                 var data = JsonUtility.FromJson<Dictionary<string, string>>(requestBody);
                 string assetPath = data["assetPath"];
                 
                 LogMessage($"尝试添加资源: {assetPath}");
                 
-                // 检查资源是否存在
-                if (AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(assetPath) != null)
+                // 验证资源路径
+                if (string.IsNullOrEmpty(assetPath))
                 {
+                    response.StatusCode = 400;
+                    response.ContentType = "application/json; charset=utf-8";
+                    string jsonResponse = "{\"success\": false, \"message\": \"资源路径不能为空\"}";
+                    byte[] buffer = Encoding.UTF8.GetBytes(jsonResponse);
+                    response.ContentLength64 = buffer.Length;
+                    await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                    await response.OutputStream.FlushAsync();
+                    response.Close();
+                    LogMessage("资源路径为空");
+                    return;
+                }
+                
+                // 检查资源是否存在
+                var asset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(assetPath);
+                if (asset != null)
+                {
+                    // 使用AssetBundleManager添加资源
+                    var manager = AssetBundleManager.Instance;
+                    manager.AddAsset(asset);
+                    
                     response.StatusCode = 200;
-                    response.ContentType = "application/json";
+                    response.ContentType = "application/json; charset=utf-8";
                     string jsonResponse = "{\"success\": true, \"message\": \"资源添加成功\"}";
                     byte[] buffer = Encoding.UTF8.GetBytes(jsonResponse);
                     response.ContentLength64 = buffer.Length;
@@ -450,22 +488,40 @@ namespace AssetBundleTools
                 }
                 else
                 {
-                    response.StatusCode = 404;
-                    response.ContentType = "application/json";
-                    string jsonResponse = "{\"success\": false, \"message\": \"资源不存在\"}";
-                    byte[] buffer = Encoding.UTF8.GetBytes(jsonResponse);
-                    response.ContentLength64 = buffer.Length;
-                    await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
-                    await response.OutputStream.FlushAsync();
-                    response.Close();
-                    LogMessage($"资源不存在: {assetPath}");
+                    // 检查文件是否存在但无法加载
+                    string fullPath = Path.Combine(Application.dataPath, "..", assetPath);
+                    if (File.Exists(fullPath))
+                    {
+                        response.StatusCode = 400;
+                        response.ContentType = "application/json; charset=utf-8";
+                        string jsonResponse = "{\"success\": false, \"message\": \"文件存在但无法作为Unity资源加载\"}";
+                        byte[] buffer = Encoding.UTF8.GetBytes(jsonResponse);
+                        response.ContentLength64 = buffer.Length;
+                        await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                        await response.OutputStream.FlushAsync();
+                        response.Close();
+                        LogMessage($"文件存在但无法加载: {assetPath}");
+                    }
+                    else
+                    {
+                        response.StatusCode = 404;
+                        response.ContentType = "application/json; charset=utf-8";
+                        string jsonResponse = "{\"success\": false, \"message\": \"资源不存在\"}";
+                        byte[] buffer = Encoding.UTF8.GetBytes(jsonResponse);
+                        response.ContentLength64 = buffer.Length;
+                        await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                        await response.OutputStream.FlushAsync();
+                        response.Close();
+                        LogMessage($"资源不存在: {assetPath}");
+                    }
                 }
             }
             catch (Exception ex)
             {
                 LogMessage($"添加资源时出错: {ex.Message}");
+                LogMessage($"异常堆栈: {ex.StackTrace}");
                 response.StatusCode = 500;
-                response.ContentType = "application/json";
+                response.ContentType = "application/json; charset=utf-8";
                 string jsonResponse = $"{{\"success\": false, \"message\": \"服务器错误: {ex.Message}\"}}";
                 byte[] buffer = Encoding.UTF8.GetBytes(jsonResponse);
                 response.ContentLength64 = buffer.Length;
@@ -518,23 +574,67 @@ namespace AssetBundleTools
             {
                 LogMessage("开始构建AssetBundle");
                 
-                // 这里应该调用实际的构建逻辑
-                // 暂时返回成功响应
-                response.StatusCode = 200;
-                response.ContentType = "application/json";
-                string jsonResponse = "{\"success\": true, \"message\": \"构建成功\"}";
-                byte[] buffer = Encoding.UTF8.GetBytes(jsonResponse);
-                response.ContentLength64 = buffer.Length;
-                await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
-                await response.OutputStream.FlushAsync();
-                response.Close();
-                LogMessage("AssetBundle构建完成");
+                // 获取构建配置
+                string requestBody = "";
+                using (var reader = new StreamReader(request.InputStream, request.ContentEncoding))
+                {
+                    requestBody = await reader.ReadToEndAsync();
+                }
+                
+                LogMessage($"收到构建请求: {requestBody}");
+                
+                // 使用AssetBundleManager进行构建
+                var manager = AssetBundleManager.Instance;
+                
+                // 检查是否有选中的资源
+                if (manager.selectedAssets.Count == 0)
+                {
+                    response.StatusCode = 400;
+                    response.ContentType = "application/json; charset=utf-8";
+                    string jsonResponse = "{\"success\": false, \"message\": \"没有选择任何资源进行构建\"}";
+                    byte[] buffer = Encoding.UTF8.GetBytes(jsonResponse);
+                    response.ContentLength64 = buffer.Length;
+                    await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                    await response.OutputStream.FlushAsync();
+                    response.Close();
+                    LogMessage("没有选择任何资源");
+                    return;
+                }
+                
+                // 异步构建AssetBundle
+                var manifest = await manager.BuildAssetBundlesAsync();
+                
+                if (manifest != null)
+                {
+                    response.StatusCode = 200;
+                    response.ContentType = "application/json; charset=utf-8";
+                    string jsonResponse = "{\"success\": true, \"message\": \"AssetBundle构建完成\"}";
+                    byte[] buffer = Encoding.UTF8.GetBytes(jsonResponse);
+                    response.ContentLength64 = buffer.Length;
+                    await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                    await response.OutputStream.FlushAsync();
+                    response.Close();
+                    LogMessage("AssetBundle构建完成");
+                }
+                else
+                {
+                    response.StatusCode = 500;
+                    response.ContentType = "application/json; charset=utf-8";
+                    string jsonResponse = "{\"success\": false, \"message\": \"AssetBundle构建失败\"}";
+                    byte[] buffer = Encoding.UTF8.GetBytes(jsonResponse);
+                    response.ContentLength64 = buffer.Length;
+                    await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                    await response.OutputStream.FlushAsync();
+                    response.Close();
+                    LogMessage("AssetBundle构建失败");
+                }
             }
             catch (Exception ex)
             {
                 LogMessage($"构建时出错: {ex.Message}");
+                LogMessage($"异常堆栈: {ex.StackTrace}");
                 response.StatusCode = 500;
-                response.ContentType = "application/json";
+                response.ContentType = "application/json; charset=utf-8";
                 string jsonResponse = $"{{\"success\": false, \"message\": \"构建失败: {ex.Message}\"}}";
                 byte[] buffer = Encoding.UTF8.GetBytes(jsonResponse);
                 response.ContentLength64 = buffer.Length;
@@ -553,27 +653,38 @@ namespace AssetBundleTools
             {
                 LogMessage("处理文件浏览请求");
                 
-                // 获取Assets文件夹下的所有资源
+                // 获取Assets文件夹下的所有资源，限制数量避免性能问题
                 string[] guids = AssetDatabase.FindAssets("", new[] { "Assets" });
                 var assets = new List<object>();
                 
+                // 限制返回的资源数量，避免界面卡顿
+                int maxAssets = 1000;
+                int count = 0;
+                
                 foreach (string guid in guids)
                 {
+                    if (count >= maxAssets) break;
+                    
                     string path = AssetDatabase.GUIDToAssetPath(guid);
                     if (!string.IsNullOrEmpty(path))
                     {
+                        // 跳过meta文件和脚本文件
+                        if (path.EndsWith(".meta") || path.EndsWith(".cs") || path.EndsWith(".js"))
+                            continue;
+                            
                         var asset = new
                         {
                             path = path,
                             name = Path.GetFileName(path),
-                            type = Path.GetExtension(path)
+                            type = Path.GetExtension(path).ToLower()
                         };
                         assets.Add(asset);
+                        count++;
                     }
                 }
                 
                 response.StatusCode = 200;
-                response.ContentType = "application/json";
+                response.ContentType = "application/json; charset=utf-8";
                 string jsonResponse = JsonUtility.ToJson(new { success = true, assets = assets });
                 byte[] buffer = Encoding.UTF8.GetBytes(jsonResponse);
                 response.ContentLength64 = buffer.Length;
@@ -585,9 +696,141 @@ namespace AssetBundleTools
             catch (Exception ex)
             {
                 LogMessage($"文件浏览时出错: {ex.Message}");
+                LogMessage($"异常堆栈: {ex.StackTrace}");
                 response.StatusCode = 500;
-                response.ContentType = "application/json";
+                response.ContentType = "application/json; charset=utf-8";
                 string jsonResponse = $"{{\"success\": false, \"message\": \"文件浏览失败: {ex.Message}\"}}";
+                byte[] buffer = Encoding.UTF8.GetBytes(jsonResponse);
+                response.ContentLength64 = buffer.Length;
+                await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                await response.OutputStream.FlushAsync();
+                response.Close();
+            }
+        }
+
+        /// <summary>
+        /// 处理获取资源列表API请求
+        /// </summary>
+        private async System.Threading.Tasks.Task ServeAssetsAsync(HttpListenerRequest request, HttpListenerResponse response)
+        {
+            try
+            {
+                LogMessage("处理获取资源列表请求");
+                
+                // 从AssetBundleManager获取已选择的资源
+                var manager = AssetBundleManager.Instance;
+                var assets = new List<object>();
+                
+                foreach (var asset in manager.selectedAssets)
+                {
+                    assets.Add(new
+                    {
+                        path = asset.path,
+                        name = Path.GetFileName(asset.path),
+                        size = asset.size,
+                        type = asset.type.ToString(),
+                        dependencies = asset.dependencies
+                    });
+                }
+                
+                response.StatusCode = 200;
+                response.ContentType = "application/json; charset=utf-8";
+                string jsonResponse = JsonUtility.ToJson(new { success = true, assets = assets });
+                byte[] buffer = Encoding.UTF8.GetBytes(jsonResponse);
+                response.ContentLength64 = buffer.Length;
+                await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                await response.OutputStream.FlushAsync();
+                response.Close();
+                LogMessage($"返回了 {assets.Count} 个已选资源");
+            }
+            catch (Exception ex)
+            {
+                LogMessage($"获取资源列表时出错: {ex.Message}");
+                response.StatusCode = 500;
+                response.ContentType = "application/json; charset=utf-8";
+                string jsonResponse = $"{{\"success\": false, \"message\": \"获取资源列表失败: {ex.Message}\"}}";
+                byte[] buffer = Encoding.UTF8.GetBytes(jsonResponse);
+                response.ContentLength64 = buffer.Length;
+                await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                await response.OutputStream.FlushAsync();
+                response.Close();
+            }
+        }
+        
+        /// <summary>
+        /// 处理获取统计信息API请求
+        /// </summary>
+        private async System.Threading.Tasks.Task ServeStatisticsAsync(HttpListenerRequest request, HttpListenerResponse response)
+        {
+            try
+            {
+                LogMessage("处理获取统计信息请求");
+                
+                // 从AssetBundleManager获取统计信息
+                var manager = AssetBundleManager.Instance;
+                var stats = manager.GetBuildStatistics();
+                
+                var statistics = new
+                {
+                    totalAssets = stats.TotalAssets,
+                    totalSize = stats.TotalSize,
+                    dependencyCount = stats.DependencyCount,
+                    estimatedBuildTime = stats.EstimatedBuildTime
+                };
+                
+                response.StatusCode = 200;
+                response.ContentType = "application/json; charset=utf-8";
+                string jsonResponse = JsonUtility.ToJson(new { success = true, statistics = statistics });
+                byte[] buffer = Encoding.UTF8.GetBytes(jsonResponse);
+                response.ContentLength64 = buffer.Length;
+                await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                await response.OutputStream.FlushAsync();
+                response.Close();
+                LogMessage("统计信息返回成功");
+            }
+            catch (Exception ex)
+            {
+                LogMessage($"获取统计信息时出错: {ex.Message}");
+                response.StatusCode = 500;
+                response.ContentType = "application/json; charset=utf-8";
+                string jsonResponse = $"{{\"success\": false, \"message\": \"获取统计信息失败: {ex.Message}\"}}";
+                byte[] buffer = Encoding.UTF8.GetBytes(jsonResponse);
+                response.ContentLength64 = buffer.Length;
+                await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                await response.OutputStream.FlushAsync();
+                response.Close();
+            }
+        }
+        
+        /// <summary>
+        /// 处理清空资源API请求
+        /// </summary>
+        private async System.Threading.Tasks.Task ServeClearAssetsAsync(HttpListenerRequest request, HttpListenerResponse response)
+        {
+            try
+            {
+                LogMessage("处理清空资源请求");
+                
+                // 从AssetBundleManager清空资源列表
+                var manager = AssetBundleManager.Instance;
+                manager.ClearAssets();
+                
+                response.StatusCode = 200;
+                response.ContentType = "application/json; charset=utf-8";
+                string jsonResponse = "{\"success\": true, \"message\": \"资源列表已清空\"}";
+                byte[] buffer = Encoding.UTF8.GetBytes(jsonResponse);
+                response.ContentLength64 = buffer.Length;
+                await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                await response.OutputStream.FlushAsync();
+                response.Close();
+                LogMessage("资源列表已清空");
+            }
+            catch (Exception ex)
+            {
+                LogMessage($"清空资源时出错: {ex.Message}");
+                response.StatusCode = 500;
+                response.ContentType = "application/json; charset=utf-8";
+                string jsonResponse = $"{{\"success\": false, \"message\": \"清空资源失败: {ex.Message}\"}}";
                 byte[] buffer = Encoding.UTF8.GetBytes(jsonResponse);
                 response.ContentLength64 = buffer.Length;
                 await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
