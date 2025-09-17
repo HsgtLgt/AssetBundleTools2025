@@ -1,0 +1,49 @@
+# 更新日志
+
+## [1.0.1] - 2025-01-27
+
+### 🔧 修复
+- **修复编译错误**: 解决了 Editor 脚本无法引用 Runtime 脚本的问题
+- **修复 meta 文件缺失**: 为所有文件添加了必要的 `.meta` 文件
+- **修复包结构**: 将所有脚本移动到 Editor 文件夹，符合 Unity 包管理规范
+
+### 📁 文件结构变更
+- 将 `AssetBundleWebServer.cs` 从 Runtime 移动到 Editor 文件夹
+- 将 `AssetBundleManager.cs` 从 Runtime 移动到 Editor 文件夹
+- 添加了 `修复说明.md` 及其 meta 文件
+- 创建了 `CHANGELOG.md` 版本更新日志
+
+### 🎯 改进
+- 优化了包结构，确保符合 Unity Package Manager 规范
+- 添加了详细的修复说明文档
+- 创建了版本控制配置文件
+
+### 📋 技术细节
+- 解决了 "AssetBundleWebServer could not be found" 编译错误
+- 修复了 "has no meta file, but it's in an immutable folder" 警告
+- 确保所有文件都有正确的 Unity 元数据
+
+---
+
+## [1.0.0] - 2025-01-27
+
+### 🎉 首次发布
+- **炫酷的 Web UI 界面**: 2025年科幻风格的用户界面
+- **异步构建系统**: 不阻塞 Unity 编辑器的资源打包
+- **实时统计功能**: 资源数量、大小、依赖关系分析
+- **拖拽操作支持**: 从 Unity Project 窗口直接拖拽资源
+- **HTTP 服务器**: 内置 Web 服务器，支持实时通信
+- **多平台支持**: 支持 Windows、Mac、Linux 平台
+
+### ✨ 特色功能
+- 🌈 **赛博朋克美学**: 霓虹色彩、几何线条设计
+- 🔮 **玻璃拟态效果**: 半透明效果、模糊背景
+- ✨ **动态交互**: 微动画、粒子效果
+- 📱 **响应式布局**: 适配不同屏幕尺寸
+
+### 🛠️ 技术架构
+- Unity Editor 工具窗口
+- HTTP 服务器通信
+- 异步 AssetBundle 构建
+- 实时进度监控
+- 详细日志记录
