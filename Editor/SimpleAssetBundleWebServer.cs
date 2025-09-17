@@ -401,8 +401,21 @@ namespace AssetBundleTools
         /// </summary>
         private void LogMessage(string message)
         {
-            Debug.Log($"[SimpleAssetBundleWebServer] {message}");
-            OnLogMessage?.Invoke(message);
+            // 使用 Unity 的主线程调度器来确保线程安全
+            if (System.Threading.Thread.CurrentThread.ManagedThreadId == 1)
+            {
+                // 主线程，直接调用
+                Debug.Log($"[SimpleAssetBundleWebServer] {message}");
+                OnLogMessage?.Invoke(message);
+            }
+            else
+            {
+                // 后台线程，使用 Unity 的主线程调度器
+                UnityEditor.EditorApplication.delayCall += () => {
+                    Debug.Log($"[SimpleAssetBundleWebServer] {message}");
+                    OnLogMessage?.Invoke(message);
+                };
+            }
         }
     }
 }
