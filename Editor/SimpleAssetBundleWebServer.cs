@@ -165,15 +165,21 @@ namespace AssetBundleTools
             
             try
             {
+                LogMessage($"开始处理路径: {path}");
                 switch (path)
                 {
                     case "/":
+                        LogMessage("处理根路径请求");
                         await ServeWebInterfaceAsync(response);
+                        LogMessage("根路径请求处理完成");
                         break;
                     case "/api/config":
+                        LogMessage("处理配置API请求");
                         await ServeConfigAsync(response);
+                        LogMessage("配置API请求处理完成");
                         break;
                     default:
+                        LogMessage($"未知路径: {path}，返回404");
                         response.StatusCode = 404;
                         response.Close();
                         break;
@@ -182,14 +188,21 @@ namespace AssetBundleTools
             catch (Exception ex)
             {
                 LogMessage($"处理请求时出错: {ex.Message}");
+                LogMessage($"异常堆栈: {ex.StackTrace}");
                 try
                 {
                     response.StatusCode = 500;
+                    string errorHtml = GenerateErrorPage($"服务器内部错误: {ex.Message}");
+                    byte[] buffer = Encoding.UTF8.GetBytes(errorHtml);
+                    response.ContentType = "text/html; charset=utf-8";
+                    response.ContentLength64 = buffer.Length;
+                    await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                    await response.OutputStream.FlushAsync();
                     response.Close();
                 }
-                catch
+                catch (Exception ex2)
                 {
-                    // 忽略关闭错误
+                    LogMessage($"发送错误响应失败: {ex2.Message}");
                 }
             }
         }
@@ -232,6 +245,9 @@ namespace AssetBundleTools
                         LogMessage("已刷新响应流");
                         
                         LogMessage($"成功提供网页内容，大小: {buffer.Length} 字节，路径: {webInterfacePath}");
+                        LogMessage("网页请求处理完成，准备关闭响应");
+                        response.Close();
+                        LogMessage("响应已关闭");
                         return;
                     }
                     else
@@ -243,6 +259,7 @@ namespace AssetBundleTools
                         response.ContentLength64 = buffer.Length;
                         await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
                         await response.OutputStream.FlushAsync();
+                        response.Close();
                         return;
                     }
                 }
@@ -255,6 +272,7 @@ namespace AssetBundleTools
                     response.ContentLength64 = buffer.Length;
                     await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
                     await response.OutputStream.FlushAsync();
+                    response.Close();
                     return;
                 }
             }
@@ -270,6 +288,7 @@ namespace AssetBundleTools
                     response.ContentLength64 = buffer.Length;
                     await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
                     await response.OutputStream.FlushAsync();
+                    response.Close();
                     LogMessage("发送了异常错误页面");
                 }
                 catch (Exception ex2)
