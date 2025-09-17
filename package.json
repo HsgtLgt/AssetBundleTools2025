@@ -4,6 +4,7 @@
   "displayName": "AssetBundle Tools 2025 - Web UI Edition",
   "description": "下一代Unity AssetBundle打包工具，具有炫酷的科幻风格Web UI界面和强大功能",
   "unity": "2020.3",
+  "unityRelease": "0f1",
   "keywords": [
     "assetbundle",
     "build",
