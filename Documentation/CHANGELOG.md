@@ -1,5 +1,20 @@
 # 更新日志
 
+## [1.0.8] - 2025-01-27
+
+### 修复
+- 为Documentation文件夹添加了.meta文件
+- 为Documentation/CHANGELOG.md添加了.meta文件
+- 增强了网页请求处理的调试日志
+- 添加了详细的异常处理和堆栈跟踪
+
+### 技术改进
+- 创建了Documentation.meta文件，解决Unity警告
+- 创建了Documentation/CHANGELOG.md.meta文件
+- 在ServeWebInterfaceAsync中添加了详细的调试日志
+- 改进了异常处理，提供更详细的错误信息
+- 添加了响应流处理的每个步骤的日志记录
+
 ## [1.0.7] - 2025-01-27
 
 ### 修复
