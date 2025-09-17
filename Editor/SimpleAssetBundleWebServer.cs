@@ -190,22 +190,45 @@ namespace AssetBundleTools
         {
             try
             {
-                string htmlPath = Path.GetFullPath(webInterfacePath);
-                if (File.Exists(htmlPath))
+                LogMessage($"尝试提供网页文件: {webInterfacePath}");
+                
+                // 尝试多个路径
+                string[] possiblePaths = {
+                    webInterfacePath,
+                    Path.GetFullPath(webInterfacePath),
+                    Path.Combine(Application.dataPath, "..", webInterfacePath),
+                    Path.Combine(Application.dataPath, "..", "Packages", "com.yourcompany.assetbundle-tools-2025", "Editor", "ui_preview.html")
+                };
+                
+                string htmlContent = null;
+                string actualPath = null;
+                
+                foreach (string path in possiblePaths)
                 {
-                    string htmlContent = await File.ReadAllTextAsync(htmlPath);
+                    LogMessage($"检查路径: {path}");
+                    if (File.Exists(path))
+                    {
+                        actualPath = path;
+                        htmlContent = await File.ReadAllTextAsync(path);
+                        LogMessage($"成功读取文件: {path}");
+                        break;
+                    }
+                }
+                
+                if (htmlContent != null)
+                {
                     byte[] buffer = Encoding.UTF8.GetBytes(htmlContent);
                     
                     response.ContentType = "text/html; charset=utf-8";
                     response.ContentLength64 = buffer.Length;
                     await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
                     await response.OutputStream.FlushAsync();
-                    LogMessage($"成功提供网页内容，大小: {buffer.Length} 字节");
+                    LogMessage($"成功提供网页内容，大小: {buffer.Length} 字节，路径: {actualPath}");
                 }
                 else
                 {
-                    LogMessage($"网页文件不存在: {htmlPath}");
-                    string errorHtml = GenerateErrorPage($"网页文件不存在: {htmlPath}");
+                    LogMessage($"所有路径都找不到网页文件");
+                    string errorHtml = GenerateErrorPage($"网页文件不存在。尝试的路径: {string.Join(", ", possiblePaths)}");
                     byte[] buffer = Encoding.UTF8.GetBytes(errorHtml);
                     response.ContentType = "text/html; charset=utf-8";
                     response.ContentLength64 = buffer.Length;
