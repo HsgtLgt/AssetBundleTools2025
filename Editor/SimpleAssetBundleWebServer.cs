@@ -78,15 +78,16 @@ namespace AssetBundleTools
         /// </summary>
         private string FindWebInterfacePath()
         {
-            // 尝试多个可能的路径
+            // 尝试多个可能的路径，使用绝对路径
             string[] possiblePaths = {
-                "Packages/com.yourcompany.assetbundle-tools-2025/Editor/ui_preview.html",
-                "Assets/Editor/ui_preview.html",
-                "Packages/AssetBundleTools2025/Editor/ui_preview.html"
+                Path.Combine(Application.dataPath, "..", "Packages", "com.yourcompany.assetbundle-tools-2025", "Editor", "ui_preview.html"),
+                Path.Combine(Application.dataPath, "Editor", "ui_preview.html"),
+                Path.Combine(Application.dataPath, "..", "Packages", "AssetBundleTools2025", "Editor", "ui_preview.html")
             };
             
             foreach (string path in possiblePaths)
             {
+                LogMessage($"检查绝对路径: {path}");
                 if (File.Exists(path))
                 {
                     LogMessage($"找到网页文件: {path}");
@@ -98,9 +99,10 @@ namespace AssetBundleTools
             string[] guids = AssetDatabase.FindAssets("ui_preview.html");
             if (guids.Length > 0)
             {
-                string foundPath = AssetDatabase.GUIDToAssetPath(guids[0]);
-                LogMessage($"通过搜索找到网页文件: {foundPath}");
-                return foundPath;
+                string assetPath = AssetDatabase.GUIDToAssetPath(guids[0]);
+                string fullPath = Path.Combine(Application.dataPath, "..", assetPath);
+                LogMessage($"通过搜索找到网页文件: {fullPath}");
+                return fullPath;
             }
             
             LogMessage("警告: 未找到网页文件 ui_preview.html");
@@ -193,61 +195,53 @@ namespace AssetBundleTools
             {
                 LogMessage($"尝试提供网页文件: {webInterfacePath}");
                 
-                // 尝试多个路径
-                string[] possiblePaths = {
-                    webInterfacePath,
-                    Path.GetFullPath(webInterfacePath),
-                    Path.Combine(Application.dataPath, "..", webInterfacePath),
-                    Path.Combine(Application.dataPath, "..", "Packages", "com.yourcompany.assetbundle-tools-2025", "Editor", "ui_preview.html")
-                };
-                
-                string htmlContent = null;
-                string actualPath = null;
-                
-                foreach (string path in possiblePaths)
+                // 直接使用已经找到的绝对路径
+                if (File.Exists(webInterfacePath))
                 {
-                    LogMessage($"检查路径: {path}");
-                    if (File.Exists(path))
+                    LogMessage($"文件存在，开始读取: {webInterfacePath}");
+                    string htmlContent = await File.ReadAllTextAsync(webInterfacePath);
+                    LogMessage($"成功读取文件: {webInterfacePath}，内容长度: {htmlContent?.Length ?? 0}");
+                    
+                    if (!string.IsNullOrEmpty(htmlContent))
                     {
-                        actualPath = path;
-                        LogMessage($"文件存在，开始读取: {path}");
-                        htmlContent = await File.ReadAllTextAsync(path);
-                        LogMessage($"成功读取文件: {path}，内容长度: {htmlContent?.Length ?? 0}");
-                        break;
+                        LogMessage("准备发送HTML内容");
+                        byte[] buffer = Encoding.UTF8.GetBytes(htmlContent);
+                        
+                        response.ContentType = "text/html; charset=utf-8";
+                        response.ContentLength64 = buffer.Length;
+                        LogMessage($"设置响应头 - ContentType: {response.ContentType}, ContentLength: {response.ContentLength64}");
+                        
+                        await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                        LogMessage("已写入响应流");
+                        
+                        await response.OutputStream.FlushAsync();
+                        LogMessage("已刷新响应流");
+                        
+                        LogMessage($"成功提供网页内容，大小: {buffer.Length} 字节，路径: {webInterfacePath}");
+                        return;
                     }
                     else
                     {
-                        LogMessage($"文件不存在: {path}");
+                        LogMessage("文件内容为空");
+                        string errorHtml = GenerateErrorPage("网页文件内容为空");
+                        byte[] buffer = Encoding.UTF8.GetBytes(errorHtml);
+                        response.ContentType = "text/html; charset=utf-8";
+                        response.ContentLength64 = buffer.Length;
+                        await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                        await response.OutputStream.FlushAsync();
+                        return;
                     }
-                }
-                
-                if (htmlContent != null)
-                {
-                    LogMessage("准备发送HTML内容");
-                    byte[] buffer = Encoding.UTF8.GetBytes(htmlContent);
-                    
-                    response.ContentType = "text/html; charset=utf-8";
-                    response.ContentLength64 = buffer.Length;
-                    LogMessage($"设置响应头 - ContentType: {response.ContentType}, ContentLength: {response.ContentLength64}");
-                    
-                    await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
-                    LogMessage("已写入响应流");
-                    
-                    await response.OutputStream.FlushAsync();
-                    LogMessage("已刷新响应流");
-                    
-                    LogMessage($"成功提供网页内容，大小: {buffer.Length} 字节，路径: {actualPath}");
                 }
                 else
                 {
-                    LogMessage($"所有路径都找不到网页文件");
-                    string errorHtml = GenerateErrorPage($"网页文件不存在。尝试的路径: {string.Join(", ", possiblePaths)}");
+                    LogMessage($"网页文件不存在: {webInterfacePath}");
+                    string errorHtml = GenerateErrorPage($"网页文件不存在: {webInterfacePath}");
                     byte[] buffer = Encoding.UTF8.GetBytes(errorHtml);
                     response.ContentType = "text/html; charset=utf-8";
                     response.ContentLength64 = buffer.Length;
                     await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
                     await response.OutputStream.FlushAsync();
-                    LogMessage("发送了错误页面");
+                    return;
                 }
             }
             catch (Exception ex)

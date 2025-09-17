@@ -154,10 +154,10 @@ namespace AssetBundleTools
             // 使用说明
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
             EditorGUILayout.LabelField("使用说明", EditorStyles.boldLabel);
-            EditorGUILayout.LabelField("1. 点击'启动服务器'启动HTTP服务器", EditorStyles.miniLabel);
-            EditorGUILayout.LabelField("2. 点击'打开网页'在浏览器中打开炫酷界面", EditorStyles.miniLabel);
-            EditorGUILayout.LabelField("3. 在网页中拖拽Unity资源进行打包", EditorStyles.miniLabel);
-            EditorGUILayout.LabelField("4. 享受现代化的AssetBundle打包体验！", EditorStyles.miniLabel);
+            EditorGUILayout.LabelField("1. 点击'启动服务器'启动HTTP服务器", EditorStyles.wordWrappedLabel);
+            EditorGUILayout.LabelField("2. 点击'打开网页'在浏览器中打开炫酷界面", EditorStyles.wordWrappedLabel);
+            EditorGUILayout.LabelField("3. 在网页中拖拽Unity资源进行打包", EditorStyles.wordWrappedLabel);
+            EditorGUILayout.LabelField("4. 享受现代化的AssetBundle打包体验！", EditorStyles.wordWrappedLabel);
             EditorGUILayout.EndVertical();
             
             EditorGUILayout.Space(10);
