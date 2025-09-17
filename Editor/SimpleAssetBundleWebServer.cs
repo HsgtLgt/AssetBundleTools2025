@@ -6,6 +6,15 @@ using System.Text;
 using UnityEditor;
 using UnityEngine;
 
+/// <summary>
+/// 简单的JSON解析辅助类
+/// </summary>
+[System.Serializable]
+public class AddAssetRequest
+{
+    public string assetPath;
+}
+
 namespace AssetBundleTools
 {
     /// <summary>
@@ -448,8 +457,8 @@ namespace AssetBundleTools
                 LogMessage($"收到添加资源请求: {requestBody}");
                 
                 // 解析JSON数据
-                var data = JsonUtility.FromJson<Dictionary<string, string>>(requestBody);
-                string assetPath = data["assetPath"];
+                var data = JsonUtility.FromJson<AddAssetRequest>(requestBody);
+                string assetPath = data.assetPath;
                 
                 LogMessage($"尝试添加资源: {assetPath}");
                 
@@ -653,34 +662,14 @@ namespace AssetBundleTools
             {
                 LogMessage("处理文件浏览请求");
                 
-                // 获取Assets文件夹下的所有资源，限制数量避免性能问题
-                string[] guids = AssetDatabase.FindAssets("", new[] { "Assets" });
+                // 使用文件系统扫描而不是AssetDatabase来避免线程问题
                 var assets = new List<object>();
+                string assetsPath = Path.Combine(Application.dataPath);
                 
-                // 限制返回的资源数量，避免界面卡顿
-                int maxAssets = 1000;
-                int count = 0;
-                
-                foreach (string guid in guids)
+                if (Directory.Exists(assetsPath))
                 {
-                    if (count >= maxAssets) break;
-                    
-                    string path = AssetDatabase.GUIDToAssetPath(guid);
-                    if (!string.IsNullOrEmpty(path))
-                    {
-                        // 跳过meta文件和脚本文件
-                        if (path.EndsWith(".meta") || path.EndsWith(".cs") || path.EndsWith(".js"))
-                            continue;
-                            
-                        var asset = new
-                        {
-                            path = path,
-                            name = Path.GetFileName(path),
-                            type = Path.GetExtension(path).ToLower()
-                        };
-                        assets.Add(asset);
-                        count++;
-                    }
+                    // 扫描Assets文件夹
+                    ScanDirectoryForAssets(assetsPath, "Assets", assets, 1000);
                 }
                 
                 response.StatusCode = 200;
@@ -706,6 +695,75 @@ namespace AssetBundleTools
                 await response.OutputStream.FlushAsync();
                 response.Close();
             }
+        }
+        
+        /// <summary>
+        /// 递归扫描目录查找资源文件
+        /// </summary>
+        private void ScanDirectoryForAssets(string physicalPath, string assetPath, List<object> assets, int maxCount)
+        {
+            if (assets.Count >= maxCount) return;
+            
+            try
+            {
+                var files = Directory.GetFiles(physicalPath);
+                foreach (string file in files)
+                {
+                    if (assets.Count >= maxCount) break;
+                    
+                    string extension = Path.GetExtension(file).ToLower();
+                    string fileName = Path.GetFileName(file);
+                    
+                    // 跳过meta文件和脚本文件
+                    if (extension == ".meta" || extension == ".cs" || extension == ".js")
+                        continue;
+                    
+                    // 只包含Unity支持的资源文件
+                    if (IsUnityAssetFile(extension))
+                    {
+                        string relativePath = assetPath + "/" + fileName;
+                        assets.Add(new
+                        {
+                            path = relativePath,
+                            name = fileName,
+                            type = extension
+                        });
+                    }
+                }
+                
+                // 递归扫描子目录
+                var directories = Directory.GetDirectories(physicalPath);
+                foreach (string dir in directories)
+                {
+                    if (assets.Count >= maxCount) break;
+                    
+                    string dirName = Path.GetFileName(dir);
+                    string newAssetPath = assetPath + "/" + dirName;
+                    ScanDirectoryForAssets(dir, newAssetPath, assets, maxCount);
+                }
+            }
+            catch (Exception ex)
+            {
+                LogMessage($"扫描目录时出错 {physicalPath}: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// 检查是否为Unity资源文件
+        /// </summary>
+        private bool IsUnityAssetFile(string extension)
+        {
+            string[] supportedExtensions = {
+                ".prefab", ".mat", ".fbx", ".obj", ".dae", ".3ds", ".blend",
+                ".png", ".jpg", ".jpeg", ".tga", ".psd", ".tiff", ".exr",
+                ".wav", ".mp3", ".ogg", ".aiff",
+                ".anim", ".controller", ".overrideController",
+                ".asset", ".unity", ".unitypackage",
+                ".shader", ".compute", ".cginc", ".hlsl",
+                ".txt", ".bytes", ".json", ".xml", ".csv"
+            };
+            
+            return Array.IndexOf(supportedExtensions, extension) >= 0;
         }
 
         /// <summary>
