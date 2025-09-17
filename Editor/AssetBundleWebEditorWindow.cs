@@ -15,7 +15,7 @@ namespace AssetBundleTools
         private AssetBundleWebServer webServer;
         private Process browserProcess;
         private bool isServerRunning = false;
-        private string webInterfacePath = "Assets/Editor/ui_preview.html";
+        private string webInterfacePath = "";
         private int serverPort = 8080;
         
         [MenuItem("工具/AssetBundle Web工具")]
@@ -30,6 +30,46 @@ namespace AssetBundleTools
         {
             // 订阅事件
             AssetBundleWebServer.OnLogMessage += OnLogMessage;
+            
+            // 自动检测网页文件路径
+            if (string.IsNullOrEmpty(webInterfacePath))
+            {
+                webInterfacePath = FindWebInterfacePath();
+            }
+        }
+        
+        /// <summary>
+        /// 自动查找网页界面文件
+        /// </summary>
+        private string FindWebInterfacePath()
+        {
+            // 尝试多个可能的路径
+            string[] possiblePaths = {
+                "Packages/com.yourcompany.assetbundle-tools-2025/Editor/ui_preview.html",
+                "Assets/Editor/ui_preview.html",
+                "Packages/AssetBundleTools2025/Editor/ui_preview.html"
+            };
+            
+            foreach (string path in possiblePaths)
+            {
+                if (File.Exists(path))
+                {
+                    AddLog($"找到网页文件: {path}");
+                    return path;
+                }
+            }
+            
+            // 如果都找不到，尝试搜索
+            string[] guids = AssetDatabase.FindAssets("ui_preview.html");
+            if (guids.Length > 0)
+            {
+                string foundPath = AssetDatabase.GUIDToAssetPath(guids[0]);
+                AddLog($"通过搜索找到网页文件: {foundPath}");
+                return foundPath;
+            }
+            
+            AddLog("警告: 未找到网页文件 ui_preview.html");
+            return "ui_preview.html"; // 默认值
         }
         
         private void OnDisable()
@@ -148,10 +188,22 @@ namespace AssetBundleTools
         {
             try
             {
-                // 检查网页文件是否存在
+                // 自动检测网页文件路径
+                if (string.IsNullOrEmpty(webInterfacePath) || !File.Exists(webInterfacePath))
+                {
+                    webInterfacePath = FindWebInterfacePath();
+                }
+                
+                // 再次检查网页文件是否存在
                 if (!File.Exists(webInterfacePath))
                 {
-                    EditorUtility.DisplayDialog("错误", "网页文件不存在，请检查路径设置", "确定");
+                    EditorUtility.DisplayDialog("错误", 
+                        $"网页文件不存在！\n\n" +
+                        $"尝试的路径: {webInterfacePath}\n\n" +
+                        $"请确保 ui_preview.html 文件存在于以下位置之一：\n" +
+                        $"- Packages/com.yourcompany.assetbundle-tools-2025/Editor/\n" +
+                        $"- Assets/Editor/\n" +
+                        $"- Packages/AssetBundleTools2025/Editor/", "确定");
                     return;
                 }
                 
@@ -164,6 +216,7 @@ namespace AssetBundleTools
                 
                 isServerRunning = true;
                 AddLog("HTTP服务器已启动");
+                AddLog($"网页文件路径: {webInterfacePath}");
                 AddLog($"网页地址: http://localhost:{serverPort}/");
                 
                 // 自动打开浏览器

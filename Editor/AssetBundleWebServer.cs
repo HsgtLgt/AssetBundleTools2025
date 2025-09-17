@@ -23,17 +23,57 @@ namespace AssetBundleTools
         [Header("服务器设置")]
         public bool autoStart = true;
         public int serverPort = 8080;
-        public string webInterfacePath = "Assets/Editor/ui_preview.html";
+        public string webInterfacePath = "";
         
         // 事件
         public static event Action<string> OnLogMessage;
         
         private void Start()
         {
+            // 自动检测网页文件路径
+            if (string.IsNullOrEmpty(webInterfacePath))
+            {
+                webInterfacePath = FindWebInterfacePath();
+            }
+            
             if (autoStart)
             {
                 StartServer();
             }
+        }
+        
+        /// <summary>
+        /// 自动查找网页界面文件
+        /// </summary>
+        private string FindWebInterfacePath()
+        {
+            // 尝试多个可能的路径
+            string[] possiblePaths = {
+                "Packages/com.yourcompany.assetbundle-tools-2025/Editor/ui_preview.html",
+                "Assets/Editor/ui_preview.html",
+                "Packages/AssetBundleTools2025/Editor/ui_preview.html"
+            };
+            
+            foreach (string path in possiblePaths)
+            {
+                if (File.Exists(path))
+                {
+                    LogMessage($"找到网页文件: {path}");
+                    return path;
+                }
+            }
+            
+            // 如果都找不到，尝试搜索
+            string[] guids = AssetDatabase.FindAssets("ui_preview.html");
+            if (guids.Length > 0)
+            {
+                string foundPath = AssetDatabase.GUIDToAssetPath(guids[0]);
+                LogMessage($"通过搜索找到网页文件: {foundPath}");
+                return foundPath;
+            }
+            
+            LogMessage("警告: 未找到网页文件 ui_preview.html");
+            return "ui_preview.html"; // 默认值
         }
         
         private void OnDestroy()
