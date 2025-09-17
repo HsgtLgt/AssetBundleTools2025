@@ -1,5 +1,20 @@
 # 更新日志
 
+## [1.0.10] - 2025-01-27
+
+### 修复
+- 修复了Unity Editor的Assertion错误
+- 改进了网页文件路径检测，使用绝对路径
+- 简化了ServeWebInterfaceAsync方法
+- 增强了错误处理和日志记录
+
+### 技术改进
+- 将EditorStyles.miniLabel改为EditorStyles.wordWrappedLabel
+- 使用Path.Combine生成绝对路径
+- 简化了网页文件读取逻辑
+- 添加了详细的调试日志
+- 改进了异常处理
+
 ## [1.0.9] - 2025-01-27
 
 ### 修复
