@@ -159,6 +159,9 @@ namespace AssetBundleTools
                     case "/":
                         await ServeWebInterfaceAsync(response);
                         break;
+                    case "/api/config":
+                        await ServeConfigAsync(response);
+                        break;
                     default:
                         response.StatusCode = 404;
                         response.Close();
@@ -168,8 +171,15 @@ namespace AssetBundleTools
             catch (Exception ex)
             {
                 LogMessage($"处理请求时出错: {ex.Message}");
-                response.StatusCode = 500;
-                response.Close();
+                try
+                {
+                    response.StatusCode = 500;
+                    response.Close();
+                }
+                catch
+                {
+                    // 忽略关闭错误
+                }
             }
         }
         
@@ -189,23 +199,85 @@ namespace AssetBundleTools
                     response.ContentType = "text/html; charset=utf-8";
                     response.ContentLength64 = buffer.Length;
                     await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                    await response.OutputStream.FlushAsync();
+                    LogMessage($"成功提供网页内容，大小: {buffer.Length} 字节");
                 }
                 else
                 {
-                    string errorHtml = GenerateErrorPage("网页文件不存在");
+                    LogMessage($"网页文件不存在: {htmlPath}");
+                    string errorHtml = GenerateErrorPage($"网页文件不存在: {htmlPath}");
                     byte[] buffer = Encoding.UTF8.GetBytes(errorHtml);
                     response.ContentType = "text/html; charset=utf-8";
                     response.ContentLength64 = buffer.Length;
                     await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                    await response.OutputStream.FlushAsync();
                 }
             }
             catch (Exception ex)
             {
                 LogMessage($"提供网页界面时出错: {ex.Message}");
+                try
+                {
+                    string errorHtml = GenerateErrorPage($"服务器错误: {ex.Message}");
+                    byte[] buffer = Encoding.UTF8.GetBytes(errorHtml);
+                    response.ContentType = "text/html; charset=utf-8";
+                    response.ContentLength64 = buffer.Length;
+                    await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                    await response.OutputStream.FlushAsync();
+                }
+                catch
+                {
+                    // 忽略错误
+                }
             }
             finally
             {
-                response.Close();
+                try
+                {
+                    response.Close();
+                }
+                catch
+                {
+                    // 忽略关闭错误
+                }
+            }
+        }
+        
+        /// <summary>
+        /// 提供配置信息
+        /// </summary>
+        private async System.Threading.Tasks.Task ServeConfigAsync(HttpListenerResponse response)
+        {
+            try
+            {
+                var config = new
+                {
+                    port = port,
+                    webInterfacePath = webInterfacePath,
+                    isRunning = isRunning
+                };
+                
+                string json = JsonUtility.ToJson(config, true);
+                byte[] buffer = Encoding.UTF8.GetBytes(json);
+                
+                response.ContentType = "application/json; charset=utf-8";
+                response.ContentLength64 = buffer.Length;
+                await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                await response.OutputStream.FlushAsync();
+                LogMessage("提供配置信息成功");
+            }
+            catch (Exception ex)
+            {
+                LogMessage($"提供配置信息时出错: {ex.Message}");
+                try
+                {
+                    response.StatusCode = 500;
+                    response.Close();
+                }
+                catch
+                {
+                    // 忽略关闭错误
+                }
             }
         }
         
