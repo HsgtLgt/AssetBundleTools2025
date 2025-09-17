@@ -188,6 +188,7 @@ namespace AssetBundleTools
         /// </summary>
         private async System.Threading.Tasks.Task ServeWebInterfaceAsync(HttpListenerResponse response)
         {
+            LogMessage("开始处理网页请求");
             try
             {
                 LogMessage($"尝试提供网页文件: {webInterfacePath}");
@@ -209,20 +210,32 @@ namespace AssetBundleTools
                     if (File.Exists(path))
                     {
                         actualPath = path;
+                        LogMessage($"文件存在，开始读取: {path}");
                         htmlContent = await File.ReadAllTextAsync(path);
-                        LogMessage($"成功读取文件: {path}");
+                        LogMessage($"成功读取文件: {path}，内容长度: {htmlContent?.Length ?? 0}");
                         break;
+                    }
+                    else
+                    {
+                        LogMessage($"文件不存在: {path}");
                     }
                 }
                 
                 if (htmlContent != null)
                 {
+                    LogMessage("准备发送HTML内容");
                     byte[] buffer = Encoding.UTF8.GetBytes(htmlContent);
                     
                     response.ContentType = "text/html; charset=utf-8";
                     response.ContentLength64 = buffer.Length;
+                    LogMessage($"设置响应头 - ContentType: {response.ContentType}, ContentLength: {response.ContentLength64}");
+                    
                     await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                    LogMessage("已写入响应流");
+                    
                     await response.OutputStream.FlushAsync();
+                    LogMessage("已刷新响应流");
+                    
                     LogMessage($"成功提供网页内容，大小: {buffer.Length} 字节，路径: {actualPath}");
                 }
                 else
@@ -234,11 +247,13 @@ namespace AssetBundleTools
                     response.ContentLength64 = buffer.Length;
                     await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
                     await response.OutputStream.FlushAsync();
+                    LogMessage("发送了错误页面");
                 }
             }
             catch (Exception ex)
             {
                 LogMessage($"提供网页界面时出错: {ex.Message}");
+                LogMessage($"异常堆栈: {ex.StackTrace}");
                 try
                 {
                     string errorHtml = GenerateErrorPage($"服务器错误: {ex.Message}");
@@ -247,21 +262,24 @@ namespace AssetBundleTools
                     response.ContentLength64 = buffer.Length;
                     await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
                     await response.OutputStream.FlushAsync();
+                    LogMessage("发送了异常错误页面");
                 }
-                catch
+                catch (Exception ex2)
                 {
-                    // 忽略错误
+                    LogMessage($"发送错误页面时也出错了: {ex2.Message}");
                 }
             }
             finally
             {
                 try
                 {
+                    LogMessage("准备关闭响应流");
                     response.Close();
+                    LogMessage("响应流已关闭");
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // 忽略关闭错误
+                    LogMessage($"关闭响应流时出错: {ex.Message}");
                 }
             }
         }
