@@ -12,7 +12,7 @@ namespace AssetBundleTools
     /// </summary>
     public class AssetBundleWebEditorWindow : EditorWindow
     {
-        private AssetBundleWebServer webServer;
+        private SimpleAssetBundleWebServer webServer;
         private Process browserProcess;
         private bool isServerRunning = false;
         private string webInterfacePath = "";
@@ -29,7 +29,7 @@ namespace AssetBundleTools
         private void OnEnable()
         {
             // 订阅事件
-            AssetBundleWebServer.OnLogMessage += OnLogMessage;
+            SimpleAssetBundleWebServer.OnLogMessage += OnLogMessage;
             
             // 自动检测网页文件路径
             if (string.IsNullOrEmpty(webInterfacePath))
@@ -75,7 +75,7 @@ namespace AssetBundleTools
         private void OnDisable()
         {
             // 取消订阅事件
-            AssetBundleWebServer.OnLogMessage -= OnLogMessage;
+            SimpleAssetBundleWebServer.OnLogMessage -= OnLogMessage;
             
             // 清理资源
             StopServer();
@@ -207,12 +207,11 @@ namespace AssetBundleTools
                     return;
                 }
                 
-                // 创建WebServer GameObject
-                GameObject serverObj = new GameObject("AssetBundleWebServer");
-                webServer = serverObj.AddComponent<AssetBundleWebServer>();
-                webServer.serverPort = serverPort;
-                webServer.webInterfacePath = webInterfacePath;
-                webServer.autoStart = true;
+                // 直接创建 WebServer 实例
+                webServer = new SimpleAssetBundleWebServer();
+                
+                // 启动服务器
+                webServer.StartServer();
                 
                 isServerRunning = true;
                 AddLog("HTTP服务器已启动");
@@ -239,7 +238,6 @@ namespace AssetBundleTools
                 if (webServer != null)
                 {
                     webServer.StopServer();
-                    DestroyImmediate(webServer.gameObject);
                     webServer = null;
                 }
                 
