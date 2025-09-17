@@ -35,6 +35,15 @@ namespace AssetBundleTools
                     webInterfacePath = FindWebInterfacePath();
                 }
                 
+                // 确保使用绝对路径
+                if (!Path.IsPathRooted(webInterfacePath))
+                {
+                    webInterfacePath = Path.GetFullPath(webInterfacePath);
+                }
+                
+                LogMessage($"最终网页文件路径: {webInterfacePath}");
+                LogMessage($"文件是否存在: {File.Exists(webInterfacePath)}");
+                
                 port = 8080;
                 listener = new HttpListener();
                 listener.Prefixes.Add($"http://localhost:{port}/");
@@ -194,6 +203,8 @@ namespace AssetBundleTools
             try
             {
                 LogMessage($"尝试提供网页文件: {webInterfacePath}");
+                LogMessage($"当前工作目录: {Directory.GetCurrentDirectory()}");
+                LogMessage($"文件是否存在: {File.Exists(webInterfacePath)}");
                 
                 // 直接使用已经找到的绝对路径
                 if (File.Exists(webInterfacePath))
@@ -209,6 +220,9 @@ namespace AssetBundleTools
                         
                         response.ContentType = "text/html; charset=utf-8";
                         response.ContentLength64 = buffer.Length;
+                        response.Headers.Add("Access-Control-Allow-Origin", "*");
+                        response.Headers.Add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+                        response.Headers.Add("Access-Control-Allow-Headers", "Content-Type");
                         LogMessage($"设置响应头 - ContentType: {response.ContentType}, ContentLength: {response.ContentLength64}");
                         
                         await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
