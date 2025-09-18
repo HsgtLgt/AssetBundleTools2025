@@ -448,6 +448,8 @@ namespace AssetBundleTools
         {
             try
             {
+                LogMessage("=== 开始处理添加资源请求 ===");
+                
                 string requestBody = "";
                 using (var reader = new StreamReader(request.InputStream, request.ContentEncoding))
                 {
@@ -461,6 +463,7 @@ namespace AssetBundleTools
                 string assetPath = data.assetPath;
                 
                 LogMessage($"尝试添加资源: {assetPath}");
+                LogMessage($"资源路径是否为空: {string.IsNullOrEmpty(assetPath)}");
                 
                 // 验证资源路径
                 if (string.IsNullOrEmpty(assetPath))
@@ -477,73 +480,84 @@ namespace AssetBundleTools
                     return;
                 }
                 
-                // 检查资源是否存在
-                var asset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(assetPath);
-                if (asset != null)
-                {
-                    // 使用AssetBundleManager添加资源
-                    var manager = AssetBundleManager.Instance;
-                    manager.AddAsset(asset);
-                    
-                    response.StatusCode = 200;
-                    response.ContentType = "application/json; charset=utf-8";
-                    string jsonResponse = "{\"success\": true, \"message\": \"资源添加成功\"}";
-                    byte[] buffer = Encoding.UTF8.GetBytes(jsonResponse);
-                    response.ContentLength64 = buffer.Length;
-                    await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
-                    await response.OutputStream.FlushAsync();
-                    response.Close();
-                    LogMessage($"成功添加资源: {assetPath}");
-                }
-                else
-                {
-                    // 检查文件是否存在但无法加载
-                    string fullPath = Path.Combine(Application.dataPath, "..", assetPath);
-                    if (File.Exists(fullPath))
+                // 由于AssetDatabase只能在主线程调用，我们使用主线程调度器
+                LogMessage($"尝试添加资源: {assetPath}（使用主线程调度器）");
+                
+                bool success = false;
+                string message = "";
+                
+                // 使用Unity的主线程调度器来执行AssetDatabase操作
+                UnityEditor.EditorApplication.delayCall += () => {
+                    try
                     {
-                        // 文件存在但无法作为Unity资源加载，可能是文件类型不支持或损坏
-                        response.StatusCode = 400;
-                        response.ContentType = "application/json; charset=utf-8";
-                        string jsonResponse = "{\"success\": false, \"message\": \"文件存在但无法作为Unity资源加载，请检查文件类型和完整性\"}";
-                        byte[] buffer = Encoding.UTF8.GetBytes(jsonResponse);
-                        response.ContentLength64 = buffer.Length;
-                        await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
-                        await response.OutputStream.FlushAsync();
-                        response.Close();
-                        LogMessage($"文件存在但无法加载: {assetPath}");
-                    }
-                    else
-                    {
-                        // 文件不存在，但在演示模式下，我们仍然允许添加
-                        LogMessage($"资源不存在: {assetPath}，但在演示模式下允许添加");
+                        LogMessage($"在主线程中尝试通过AssetDatabase加载资源: {assetPath}");
+                        var asset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(assetPath);
+                        LogMessage($"AssetDatabase加载结果: {(asset != null ? "成功" : "失败")}");
                         
-                        // 在演示模式下，即使资源不存在也允许添加
-                        var manager = AssetBundleManager.Instance;
-                        
-                        // 创建一个模拟的AssetInfo
-                        var mockAssetInfo = new AssetInfo
+                        if (asset != null)
                         {
-                            path = assetPath,
-                            size = 0,
-                            dependencies = new string[0],
-                            lastModified = DateTime.Now,
-                            type = GetAssetTypeFromPath(assetPath),
-                            bundleName = ""
-                        };
-                        
-                        manager.selectedAssets.Add(mockAssetInfo);
-                        
-                        response.StatusCode = 200;
-                        response.ContentType = "application/json; charset=utf-8";
-                        string jsonResponse = "{\"success\": true, \"message\": \"资源已添加（演示模式）\"}";
-                        byte[] buffer = Encoding.UTF8.GetBytes(jsonResponse);
-                        response.ContentLength64 = buffer.Length;
-                        await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
-                        await response.OutputStream.FlushAsync();
-                        response.Close();
-                        LogMessage($"演示模式下添加资源: {assetPath}");
+                            LogMessage("资源存在，使用AssetBundleManager添加");
+                            // 使用AssetBundleManager添加资源
+                            var manager = AssetBundleManager.Instance;
+                            manager.AddAsset(asset);
+                            LogMessage($"成功添加资源: {assetPath}");
+                        }
+                        else
+                        {
+                            // 检查文件是否存在但无法加载
+                            string fullPath = Path.Combine(Application.dataPath, "..", assetPath);
+                            LogMessage($"检查物理文件路径: {fullPath}");
+                            LogMessage($"物理文件是否存在: {File.Exists(fullPath)}");
+                            
+                            if (File.Exists(fullPath))
+                            {
+                                LogMessage("文件存在但无法作为Unity资源加载");
+                            }
+                            else
+                            {
+                                // 文件不存在，但在演示模式下，我们仍然允许添加
+                                LogMessage($"资源不存在: {assetPath}，但在演示模式下允许添加");
+                                
+                                // 在演示模式下，即使资源不存在也允许添加
+                                var manager = AssetBundleManager.Instance;
+                                LogMessage($"AssetBundleManager实例: {(manager != null ? "存在" : "不存在")}");
+                                
+                                // 创建一个模拟的AssetInfo
+                                var mockAssetInfo = new AssetInfo
+                                {
+                                    path = assetPath,
+                                    size = 0,
+                                    dependencies = new string[0],
+                                    lastModified = DateTime.Now,
+                                    type = GetAssetTypeFromPath(assetPath),
+                                    bundleName = ""
+                                };
+                                
+                                LogMessage($"创建的模拟资源信息: {mockAssetInfo.path}, 类型: {mockAssetInfo.type}");
+                                
+                                manager.selectedAssets.Add(mockAssetInfo);
+                                LogMessage($"已添加到资源列表，当前资源数量: {manager.selectedAssets.Count}");
+                                LogMessage($"演示模式下添加资源: {assetPath}");
+                            }
+                        }
                     }
-                }
+                    catch (Exception ex)
+                    {
+                        LogMessage($"在主线程中处理资源时出错: {ex.Message}");
+                    }
+                };
+                
+                // 由于是异步操作，我们直接返回成功响应
+                // 实际的资源添加会在主线程中完成
+                response.StatusCode = 200;
+                response.ContentType = "application/json; charset=utf-8";
+                string jsonResponse = "{\"success\": true, \"message\": \"资源添加请求已提交，正在处理中...\"}";
+                byte[] buffer = Encoding.UTF8.GetBytes(jsonResponse);
+                response.ContentLength64 = buffer.Length;
+                await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                await response.OutputStream.FlushAsync();
+                response.Close();
+                LogMessage("=== 添加资源请求处理完成 ===");
             }
             catch (Exception ex)
             {
@@ -680,31 +694,42 @@ namespace AssetBundleTools
         {
             try
             {
-                LogMessage("处理文件浏览请求");
+                LogMessage("=== 开始处理文件浏览请求 ===");
                 
                 var assets = new List<object>();
                 string assetsPath = Application.dataPath;
                 
                 LogMessage($"检查Assets路径: {assetsPath}");
                 LogMessage($"Assets目录是否存在: {Directory.Exists(assetsPath)}");
+                LogMessage($"当前工作目录: {Directory.GetCurrentDirectory()}");
                 
                 if (Directory.Exists(assetsPath))
                 {
                     try
                     {
-                        // 扫描Assets文件夹
+                        LogMessage("开始扫描Assets目录...");
+                        // 扫描Assets文件夹（使用文件系统扫描，避免线程问题）
                         ScanDirectoryForAssets(assetsPath, "Assets", assets, 1000);
                         LogMessage($"成功扫描到 {assets.Count} 个资源文件");
+                        
+                        // 输出前几个找到的资源
+                        for (int i = 0; i < Math.Min(5, assets.Count); i++)
+                        {
+                            LogMessage($"找到资源 {i + 1}: {assets[i]}");
+                        }
                     }
                     catch (Exception scanEx)
                     {
                         LogMessage($"扫描Assets目录时出错: {scanEx.Message}");
+                        LogMessage($"扫描异常堆栈: {scanEx.StackTrace}");
                         // 即使扫描出错，也返回空列表而不是失败
                     }
                 }
                 else
                 {
                     LogMessage("Assets目录不存在，可能不在Unity项目中运行");
+                    LogMessage("提供示例资源列表用于演示");
+                    
                     // 返回一个示例资源列表，用于演示
                     assets.Add(new
                     {
@@ -724,30 +749,62 @@ namespace AssetBundleTools
                         name = "Texture.png",
                         type = ".png"
                     });
+                    assets.Add(new
+                    {
+                        path = "Assets/Example/Audio.wav",
+                        name = "Audio.wav",
+                        type = ".wav"
+                    });
+                    assets.Add(new
+                    {
+                        path = "Assets/Example/Model.fbx",
+                        name = "Model.fbx",
+                        type = ".fbx"
+                    });
                 }
+                
+                LogMessage($"准备返回 {assets.Count} 个资源");
                 
                 response.StatusCode = 200;
                 response.ContentType = "application/json; charset=utf-8";
-                string jsonResponse = JsonUtility.ToJson(new { success = true, assets = assets });
+                
+                // 创建响应数据
+                var responseData = new { success = true, assets = assets };
+                string jsonResponse = JsonUtility.ToJson(responseData);
+                
+                LogMessage($"JSON响应长度: {jsonResponse.Length}");
+                LogMessage($"JSON响应内容: {jsonResponse}");
+                
                 byte[] buffer = Encoding.UTF8.GetBytes(jsonResponse);
                 response.ContentLength64 = buffer.Length;
+                
                 await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
                 await response.OutputStream.FlushAsync();
                 response.Close();
-                LogMessage($"返回了 {assets.Count} 个资源");
+                
+                LogMessage($"成功返回了 {assets.Count} 个资源");
+                LogMessage("=== 文件浏览请求处理完成 ===");
             }
             catch (Exception ex)
             {
                 LogMessage($"文件浏览时出错: {ex.Message}");
                 LogMessage($"异常堆栈: {ex.StackTrace}");
-                response.StatusCode = 500;
-                response.ContentType = "application/json; charset=utf-8";
-                string jsonResponse = $"{{\"success\": false, \"message\": \"文件浏览失败: {ex.Message}\"}}";
-                byte[] buffer = Encoding.UTF8.GetBytes(jsonResponse);
-                response.ContentLength64 = buffer.Length;
-                await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
-                await response.OutputStream.FlushAsync();
-                response.Close();
+                
+                try
+                {
+                    response.StatusCode = 500;
+                    response.ContentType = "application/json; charset=utf-8";
+                    string jsonResponse = $"{{\"success\": false, \"message\": \"文件浏览失败: {ex.Message}\"}}";
+                    byte[] buffer = Encoding.UTF8.GetBytes(jsonResponse);
+                    response.ContentLength64 = buffer.Length;
+                    await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                    await response.OutputStream.FlushAsync();
+                    response.Close();
+                }
+                catch (Exception ex2)
+                {
+                    LogMessage($"发送错误响应时也出错了: {ex2.Message}");
+                }
             }
         }
         

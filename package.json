@@ -1,43 +1,25 @@
 {
-  "name": "com.yourcompany.assetbundle-tools-2025",
-  "version": "1.0.15",
-  "displayName": "AssetBundle Tools 2025 - Web UI Edition",
-  "description": "下一代Unity AssetBundle打包工具，具有炫酷的科幻风格Web UI界面和强大功能",
+  "name": "com.yourcompany.assetbundle-tools",
+  "version": "1.0.0",
+  "displayName": "AssetBundle Tools 2025",
+  "description": "下一代Unity AssetBundle打包工具，具有现代化UI和强大功能",
+  "unity": "2020.3",
   "keywords": [
     "assetbundle",
     "build",
     "tools",
-    "editor",
-    "web",
-    "ui",
-    "sci-fi",
-    "cyberpunk"
+    "editor"
   ],
   "author": {
     "name": "Your Name",
     "email": "your.email@example.com"
   },
   "dependencies": {},
-  "changelogUrl": "https://github.com/HsgtLgt/AssetBundleTools2025/blob/main/Documentation/CHANGELOG.md",
-  "documentationUrl": "https://github.com/HsgtLgt/AssetBundleTools2025/blob/main/README.md",
-  "licensesUrl": "https://github.com/HsgtLgt/AssetBundleTools2025/blob/main/LICENSE",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/HsgtLgt/AssetBundleTools2025.git"
-  },
-  "publishConfig": {
-    "registry": "https://packages.unity.com"
-  },
   "samples": [
     {
       "displayName": "Basic Usage",
       "description": "基本使用示例",
       "path": "Samples~/BasicUsage"
     }
-  ],
-  "unity": "2020.3",
-  "unityRelease": "0f1",
-  "hideInEditor": false,
-  "type": "tool",
-  "category": "Editor"
+  ]
 }

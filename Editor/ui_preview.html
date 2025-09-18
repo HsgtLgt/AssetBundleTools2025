@@ -718,20 +718,33 @@
             
             async addAsset(assetPath) {
                 try {
+                    addLog(`尝试添加资源: ${assetPath}`, 'info');
+                    
                     const response = await fetch(`${this.baseURL}/api/add-asset`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ assetPath: assetPath })
                     });
                     
+                    addLog(`添加资源API响应状态: ${response.status}`, 'info');
+                    
                     if (response.ok) {
-                        await this.loadInitialData(); // 重新加载数据
-                        addLog(`已添加资源: ${assetPath}`, 'success');
+                        const data = await response.json();
+                        addLog(`添加资源API响应数据: ${JSON.stringify(data)}`, 'info');
+                        
+                        if (data.success) {
+                            await this.loadInitialData(); // 重新加载数据
+                            addLog(`已添加资源: ${assetPath}`, 'success');
+                        } else {
+                            addLog(`添加资源失败: ${data.message || '未知错误'}`, 'error');
+                        }
                     } else {
-                        addLog(`添加资源失败: ${assetPath}`, 'error');
+                        const errorText = await response.text();
+                        addLog(`添加资源失败 - HTTP ${response.status}: ${errorText}`, 'error');
                     }
                 } catch (error) {
                     addLog(`添加资源时出错: ${error.message}`, 'error');
+                    addLog(`错误堆栈: ${error.stack}`, 'error');
                 }
             }
             
@@ -804,19 +817,25 @@
                         method: 'GET'
                     });
                     
+                    addLog(`文件浏览API响应状态: ${response.status}`, 'info');
+                    
                     if (response.ok) {
                         const data = await response.json();
+                        addLog(`文件浏览API响应数据: ${JSON.stringify(data)}`, 'info');
+                        
                         if (data.success && data.assets) {
                             addLog(`找到 ${data.assets.length} 个资源文件`, 'success');
                             this.showFileBrowser(data.assets);
                         } else {
-                            addLog('文件浏览失败', 'error');
+                            addLog(`文件浏览失败: ${data.message || '未知错误'}`, 'error');
                         }
                     } else {
-                        addLog('文件浏览失败', 'error');
+                        const errorText = await response.text();
+                        addLog(`文件浏览失败 - HTTP ${response.status}: ${errorText}`, 'error');
                     }
                 } catch (error) {
                     addLog(`文件浏览时出错: ${error.message}`, 'error');
+                    addLog(`错误堆栈: ${error.stack}`, 'error');
                 }
             }
             
