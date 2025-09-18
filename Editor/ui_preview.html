@@ -952,10 +952,53 @@
             
             // 处理拖拽的文件
             const files = Array.from(e.dataTransfer.files);
+            addLog(`检测到 ${files.length} 个拖拽文件`, 'info');
+            
             for (const file of files) {
-                // 模拟Unity资源路径（实际应用中需要从Unity获取真实路径）
-                const assetPath = `Assets/${file.name}`;
-                await unityConnector.addAsset(assetPath);
+                try {
+                    // 检查文件类型
+                    const extension = file.name.split('.').pop().toLowerCase();
+                    const supportedExtensions = ['prefab', 'mat', 'fbx', 'obj', 'dae', 'png', 'jpg', 'jpeg', 'tga', 'psd', 'wav', 'mp3', 'ogg', 'anim', 'controller'];
+                    
+                    if (!supportedExtensions.includes(extension)) {
+                        addLog(`跳过不支持的文件类型: ${file.name}`, 'warning');
+                        continue;
+                    }
+                    
+                    // 尝试从Unity项目浏览器中查找匹配的资源
+                    const response = await fetch(`${unityConnector.baseURL}/api/browse-files`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.success && data.assets) {
+                            // 查找匹配的资源
+                            const matchingAsset = data.assets.find(asset => 
+                                asset.name.toLowerCase() === file.name.toLowerCase()
+                            );
+                            
+                            if (matchingAsset) {
+                                addLog(`找到匹配的资源: ${matchingAsset.path}`, 'info');
+                                await unityConnector.addAsset(matchingAsset.path);
+                            } else {
+                                // 如果没有找到匹配的资源，尝试使用文件名创建路径
+                                const assetPath = `Assets/${file.name}`;
+                                addLog(`尝试添加资源: ${assetPath}`, 'info');
+                                await unityConnector.addAsset(assetPath);
+                            }
+                        } else {
+                            // 如果文件浏览失败，使用默认路径
+                            const assetPath = `Assets/${file.name}`;
+                            addLog(`使用默认路径添加资源: ${assetPath}`, 'info');
+                            await unityConnector.addAsset(assetPath);
+                        }
+                    } else {
+                        // 如果无法连接文件浏览API，使用默认路径
+                        const assetPath = `Assets/${file.name}`;
+                        addLog(`无法浏览文件，使用默认路径: ${assetPath}`, 'warning');
+                        await unityConnector.addAsset(assetPath);
+                    }
+                } catch (error) {
+                    addLog(`处理文件 ${file.name} 时出错: ${error.message}`, 'error');
+                }
             }
         });
 
